@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>WebGPU ML Bench</title>
+    <style>
+      :root{--bg:#0b1020;--fg:#cfe3ff;--border:#e5e7eb;--muted:#667085}
+      *{box-sizing:border-box}
+      body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;margin:0;background:#fafafa;color:#0b1220}
+      .wrap{max-width:980px;margin:32px auto;padding:0 16px}
+      h1{font-size:40px;margin:0 0 8px}
+      p.sub{margin:0 0 20px;color:#475467}
+      .row{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0}
+      .btn{padding:.65rem 1rem;border-radius:.7rem;border:1px solid var(--border);background:#fff;font-weight:600;cursor:pointer}
+      .btn.primary{background:#111827;color:#fff;border-color:#111827}
+      .card{background:#fff;border:1px solid var(--border);border-radius:16px;padding:16px;margin-top:16px}
+      .grid{display:grid;grid-template-columns:repeat(8,1fr);gap:12px}
+      .field{grid-column:span 2}
+      .field label{display:block;font-size:12px;color:#6b7280;margin-bottom:4px}
+      .field input,.field select{width:100%;padding:.6rem .7rem;border:1px solid var(--border);border-radius:.6rem;background:#fff}
+      .results{margin-top:16px}
+      table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;border:1px solid var(--border)}
+      th,td{padding:10px 12px;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums}
+      th{background:#f8fafc;text-align:left;color:#111827}
+      #log{white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--bg);color:var(--fg);padding:16px;border-radius:12px;margin-top:16px}
+      .muted{color:#667085}
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>WebGPU ML Bench</h1>
+      <p class="sub">Detect hardware, run sanity, and benchmark matmul (f32/f16) with auto-tuning.</p>
+
+      <div class="row">
+        <button id="btn-detect" class="btn">Detect GPU</button>
+        <button id="btn-sanity" class="btn">Run sanity compute</button>
+      </div>
+
+      <div class="card">
+        <div class="grid">
+          <div class="field"><label>M</label><input id="m" type="number" value="512" min="1"></div>
+          <div class="field"><label>N</label><input id="n" type="number" value="512" min="1"></div>
+          <div class="field"><label>K</label><input id="k" type="number" value="512" min="1"></div>
+          <div class="field"><label>repeats</label><input id="repeats" type="number" value="10" min="1"></div>
+          <div class="field"><label>tile M (tm)</label><input id="tm" type="number" value="16" min="1"></div>
+          <div class="field"><label>tile N (tn)</label><input id="tn" type="number" value="16" min="1"></div>
+          <div class="field"><label>tile K (tk)</label><input id="tk" type="number" value="16" min="1"></div>
+          <div class="field">
+            <label>dtype</label>
+            <select id="dtype">
+              <option value="f32">f32</option>
+              <option value="f16">f16</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <button id="btn-matmul-f32" class="btn primary">Run matmul f32</button>
+          <button id="btn-matmul-f16" class="btn">Run matmul f16</button>
+          <button id="btn-matmul-auto" class="btn">Auto-tune matmul</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="grid">
+          <div class="field"><label>size (B=N=size)</label><input id="size" type="number" value="512" min="1"></div>
+          <div class="field">
+            <label>dtype</label>
+            <select id="dtype" >
+              <option value="f32">f32</option>
+              <option value="f16">f16</option>
+            </select>
+          </div>
+        </div>
+        <div class="row">
+          <button id="btn-qk-score" class="btn">Run QK-Score</button>
+          <button id="btn-softmax" class="btn">Run Softmax</button>
+          <button id="btn-layernorm" class="btn">Run LayerNorm</button>
+          <button id="btn-gelu" class="btn">Run GELU</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="grid">
+          <div class="field" style="grid-column: span 6;">
+            <label>texts (one per line)</label>
+            <textarea id="texts" rows="5" style="width:100%;padding:.6rem .7rem;border:1px solid var(--border);border-radius:.6rem;background:#fff">hello world
+
+webgpu ml bench
+transformers.js minilm embeddings</textarea>
+          </div>
+          <div class="field">
+            <label>repeats</label>
+            <input id="repeats-e2e" type="number" value="5" min="1">
+          </div>
+          <div class="field">
+            <label> </label>
+            <button id="btn-e2e-minilm" class="btn">Run MiniLM embeddings</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row">
+          <button id="btn-tensorflow" class="btn">Run TensorFlow.js EfficientNet</button>
+        </div>
+      </div>
+
+      <div class="results">
+        <table id="results">
+          <thead>
+            <tr>
+              <th>Op</th>
+              <th>Shape</th>
+              <th>Tiles</th>
+              <th>DType</th>
+              <th>Vendor</th>
+              <th>GPU-TS</th>
+              <th>p50 (ms)</th>
+              <th>p95 (ms)</th>
+              <th>Perf (GFLOPs/GB/s/samples/s)</th>
+              <th>Avg (ms)</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <div class="muted" style="margin-top:8px">Results append here; use auto-tune to try multiple tile shapes.</div>
+      </div>
+
+      <div id="log"></div>
+    </div>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
